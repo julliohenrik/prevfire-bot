@@ -2,9 +2,9 @@
 
 Main repository for all scripts of CAJU's custom robot for fire detection and prevention, prevfire-bot.
 
-The full documentation of the project is in [prevfire-bot Docs](https://caju-bot-docs.readthedocs.io/pt/latest/).
+The full documentation of the project is in [prevfire-bot Docs](https://caju-bot-docs.readthedocs.io/pt/latest/). Note that it is in portuguese and I don't want to bother translating, I'm sorry!
 
-This shouldn't be used as a guide or tutorial on how to make a robot. We're are just learning and our methods may not be good examples to follow!
+This shouldn't be used as a guide or tutorial on how to make a robot. This is just a janky school project and our methods may not be good examples to follow!
 
 ## Installation
 
@@ -20,13 +20,13 @@ Create a virtual environment for installing dependencies:
 python -m venv .venv
 ```
 
-Install dependencies with pip using requirements.txt:
+Install dependencies with requirements.txt:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or install it manually with:
+Or manually:
 
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
