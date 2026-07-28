@@ -30,7 +30,7 @@ Or manually:
 
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install ultralytics opencv-python-headless dill
+pip install ultralytics opencv-python-headless dill gpiozero
 ```
 
 This installs the bare-minimum libraries for the scripts to work.
