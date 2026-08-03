@@ -289,3 +289,13 @@
 [CRITICAL] Failed to start Vision: Unreachable camera index (usb0)
 [INFO] Shutting down...
 
+[INFO] Initiating in IDLE state
+[DEBUG] Using selector: EpollSelector
+[INFO] Loading model: {0: 'fire', 1: 'smoke'}
+[ERROR] Could not open camera on interface 0. Retrying in 10 seconds
+[INFO] Shutting down...
+
+[ERROR] Could not open camera on interface 0. Retrying in 10 seconds
+[CRITICAL] Failed to start Vision: Unreachable camera index (usb0)
+[INFO] Shutting down...
+
