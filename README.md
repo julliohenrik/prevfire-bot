@@ -2,11 +2,13 @@
 
 Main repository for all scripts of CAJU's custom robot for fire detection and prevention, prevfire-bot.
 
-The full documentation of the project is in [prevfire-bot Docs](https://caju-bot-docs.readthedocs.io/pt/latest/). Note that it is in portuguese and I don't want to bother translating, I'm sorry!
+The full documentation of the project is in [prevfire-bot Docs](https://caju-bot-docs.readthedocs.io/pt/latest/). Note that it is in Portuguese and I don't want to bother translating. Sorry!
 
 This shouldn't be used as a guide or tutorial on how to make a robot. This is just a janky school project and our methods may not be good examples to follow!
 
 ## Installation
+
+This is meant for Linux. It will not work in Windows or MacOS.
 
 Clone this repository on your machine with git
 
