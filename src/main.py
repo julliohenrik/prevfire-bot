@@ -10,6 +10,7 @@ import atexit
 import termios
 from logging.handlers import RotatingFileHandler, QueueListener
 from pathlib import Path
+from typing import Any, override
 
 ## third party
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -51,23 +52,25 @@ def _restore_terminal():
 
 _ = atexit.register(_restore_terminal)
 
-## This class redefines the method of creating a thread so that it raises the exceptions to the main thread
+## This class overrides the Thread's run and join functions so that a subthread raises an exception to the main thread
 class PropagatingThread(Thread):
-    def run(self):
-        self.exc = None
-        try:
-            if hasattr(self, '_Thread__target'):
-                self.ret = self._Thread__target(*self._Thread__args, **self._Thread__kwargs)
-            else:
-                self.ret = self._target(*self._args, **self._kwargs)
-        except BaseException as e:
-            self.exc = e
+	@override
+	def run(self):
+		self.exc = None
+		try:
+			if hasattr(self, '_Thread__target'):
+				self.ret = self._Thread__target(*self._Thread__args, **self._Thread__kwargs)
+			else:
+				self.ret = self._target(*self._args, **self._kwargs)
+		except BaseException as e:
+			self.exc = e
 
-    def join(self, timeout=None):
-        super(PropagatingThread, self).join(timeout)
-        if self.exc:
-            raise self.exc
-        return self.ret
+	@override
+	def join(self, timeout=None):
+		super(PropagatingThread, self).join(timeout)
+		if self.exc:
+			raise self.exc
+		return self.ret
 
 ## This defines the behavior of the KeyboardInterrupt so that all processes and threads exits gracefully
 def sigint_handling(signum, frame) -> None:
@@ -92,26 +95,26 @@ def main():
 			argv.threshold = .5
 
 		model_path: Path = ROOT_DIR / "models" / argv.model
-		log_queue: multiprocessing.Queue = multiprocessing.Queue()
+		log_queue: multiprocessing.Queue[Any] = multiprocessing.Queue()
 		listener = QueueListener(log_queue, *log.handlers)
 		listener.start()
 
 		threading.Thread(target=cmd.handling, args=(th_exit,), daemon=True).start()
 
 		vision = PropagatingThread(
-			target=vsn.init_vision,
-			args=(
-				model_path,
-				argv.convert,
-				argv.threshold,
-				argv.camera,
-				argv.resWidth,
-				argv.resHeight,
-				mp_exit,
-				log_queue,
-			),
-			daemon=False
-		)
+				target=vsn.init_vision,
+				args=(
+					model_path,
+					argv.convert,
+					argv.threshold,
+					argv.camera,
+					argv.resWidth,
+					argv.resHeight,
+					mp_exit,
+					log_queue,
+					),
+				daemon=False
+				)
 
 		vision.start()
 		try:
