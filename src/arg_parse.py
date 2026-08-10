@@ -9,7 +9,7 @@ class InvalidStateError(Exception):
 class InvalidThresholdError(Exception):
 	pass
 
-def get_parse() -> argparse.Namespace:
+def get_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Robot Entry Point")
 
 	_ = parser.add_argument(

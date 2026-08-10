@@ -1,3 +1,4 @@
+from logging.handlers import QueueHandler
 from pathlib import Path
 from time import sleep
 from typing import Any
@@ -18,10 +19,17 @@ def init_vision(
 	cam_id: int,
 	res_width: int,
 	res_height: int,
-	mp_exit
+	mp_exit,
+	log_queue,
 ) -> None:
+
+	log.addHandler(QueueHandler(log_queue))
 	
 	tries = 1
+
+	## FIX ME: The "tries for loop" exceptions should be handled by the main thread to avoid
+	## weird behaviour with KeyboardInterrupt: The program is currently shutdown two times.
+
 	for n in range(tries):
 		try: 
 			model = load_model(model_path, convert)
@@ -74,8 +82,8 @@ def load_model(model_path: Path, convert: bool) -> YOLO:
 
 def convert_model(model_pt: YOLO) -> YOLO:
 	model_ncnn_name: str = model_pt.export(format="ncnn", imgsz=640)
-	# use this instead if extra speed is desired in cost of accuracy
-	# model.export(format="ncnn", int8=True)
+	## use this instead if extra speed is desired in cost of accuracy
+	#model.export(format="ncnn", int8=True)
 	model_ncnn: YOLO = YOLO(model_ncnn_name, task="detect")
 
 	log.info("Using converted ncnn model")
@@ -85,8 +93,8 @@ def convert_model(model_pt: YOLO) -> YOLO:
 
 def init_capture(camera_id: int, res_w: int, res_h: int) -> cv2.VideoCapture:
 
-	# camera_id = 0 or 1
-	# depends on which usb interface is plugged in
+	## camera_id should be 0 or 1 in the pi
+	## depends on which usb interface is plugged in
 	cap: cv2.VideoCapture = cv2.VideoCapture(camera_id)
 
 	if not cap.isOpened():
@@ -98,7 +106,7 @@ def init_capture(camera_id: int, res_w: int, res_h: int) -> cv2.VideoCapture:
 	return cap
 
 
-def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, mp_exit: Event) -> None:
+def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, mp_exit) -> None:
 	consecutive_detections: int = 0
 	required_consecutive: int = 5
 

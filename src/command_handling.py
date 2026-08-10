@@ -17,7 +17,7 @@ def handling(exit: threading.Event):
 
 		cmd = cmd.strip().lower()
 
-		if cmd == "exit" or cmd == "quit" or cmd == "stop":
+		if cmd == "exit" or cmd == "quit" or cmd == "q":
 			os.kill(os.getpid(), signal.SIGINT)
 		else:
 			log.error("Invalid command")
