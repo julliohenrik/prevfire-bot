@@ -102,19 +102,19 @@ def main():
 		threading.Thread(target=cmd.handling, args=(th_exit,), daemon=True).start()
 
 		vision = PropagatingThread(
-				target=vsn.init_vision,
-				args=(
-					model_path,
-					argv.convert,
-					argv.threshold,
-					argv.camera,
-					argv.resWidth,
-					argv.resHeight,
-					mp_exit,
-					log_queue,
-					),
-				daemon=False
-				)
+			target=vsn.init_vision,
+			args=(
+				model_path,
+				argv.convert,
+				argv.threshold,
+				argv.camera,
+				argv.resWidth,
+				argv.resHeight,
+				th_exit,
+				log_queue,
+				),
+			daemon=False
+		)
 
 		vision.start()
 		try:

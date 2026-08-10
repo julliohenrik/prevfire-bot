@@ -19,7 +19,7 @@ def init_vision(
 	cam_id: int,
 	res_width: int,
 	res_height: int,
-	mp_exit,
+	exit,
 	log_queue,
 ) -> None:
 
@@ -55,11 +55,11 @@ def init_vision(
 
 			if (n < tries-1):
 				log.error(f"{e}. Retrying in 10 seconds")
-				mp_exit.wait(10)
+				exit.wait(10)
 	else:
 		raise Exception(f"Unreachable camera index (usb{cam_id})")
 
-	parse_detections(model, cap, min_thresh, mp_exit)
+	parse_detections(model, cap, min_thresh, exit)
 
 
 def load_model(model_path: Path, convert: bool) -> YOLO:
@@ -106,11 +106,11 @@ def init_capture(camera_id: int, res_w: int, res_h: int) -> cv2.VideoCapture:
 	return cap
 
 
-def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, mp_exit) -> None:
+def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit) -> None:
 	consecutive_detections: int = 0
 	required_consecutive: int = 5
 
-	while not (mp_exit and mp_exit.is_set()):
+	while not exit.is_set:
 		ret: bool
 		frame: Any
 		ret, frame = cap.read()
@@ -119,7 +119,7 @@ def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, mp_e
 			log.warning("Frame dropped or camera disconnected")
 			break  # Or attempt to reconnect
 
-		results: list[Any] = model(frame, stream=True, verbose=False)
+		results = model(frame, stream=True, verbose=False)
 
 		if not results:
 			continue
