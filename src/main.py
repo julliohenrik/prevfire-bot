@@ -1,3 +1,5 @@
+#!/bin/python
+
 ## native
 import sys
 import os
@@ -10,7 +12,7 @@ import atexit
 import termios
 from logging.handlers import RotatingFileHandler, QueueListener
 from pathlib import Path
-from typing import Any, override
+from typing import Any
 
 ## third party
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -54,7 +56,7 @@ _ = atexit.register(_restore_terminal)
 
 ## This class overrides the Thread's run and join functions so that a subthread raises an exception to the main thread
 class PropagatingThread(Thread):
-	@override
+	#@override
 	def run(self):
 		self.exc = None
 		try:
@@ -65,7 +67,7 @@ class PropagatingThread(Thread):
 		except BaseException as e:
 			self.exc = e
 
-	@override
+	#@override
 	def join(self, timeout=None):
 		super(PropagatingThread, self).join(timeout)
 		if self.exc:
@@ -89,7 +91,7 @@ def main():
 			argp.eval(argv)
 		except argp.InvalidStateError as e:
 			log.warning(f"Invalid state: '{e}'. Fallback to 'IDLE'")
-			argv.start = "idle"
+			argv.state = "idle"
 		except argp.InvalidThresholdError as e:
 			log.warning(f"Invalid detection threshold: {e}. Fallback to '0.5'")
 			argv.threshold = .5
@@ -110,10 +112,10 @@ def main():
 				argv.camera,
 				argv.resWidth,
 				argv.resHeight,
+				argv.stream,
 				th_exit,
 				log_queue,
-				),
-			daemon=False
+			)
 		)
 
 		vision.start()

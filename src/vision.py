@@ -5,6 +5,7 @@ from typing import Any
 from ultralytics import YOLO
 import cv2
 import logging
+import stream_yolo
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ def init_vision(
 	cam_id: int,
 	res_width: int,
 	res_height: int,
+	stream: bool,
 	exit,
 	log_queue,
 ) -> None:
@@ -38,7 +40,7 @@ def init_vision(
 
 		except FileNotFoundError as e:
 			log.error(f"{e}")
-			model_path = model_path.parent / "default-fd_ncnn_model"
+			model_path = model_path.parent / "default_ncnn_model"
 	else:
 		raise Exception(f"Failed to start Vision: Invalid or not found model")
 
@@ -51,7 +53,6 @@ def init_vision(
 		except IndexError as e:
 			if 'cap' in locals() and cap.isOpened():
 				cap.release()
-			cv2.destroyAllWindows()
 
 			if (n < tries-1):
 				log.error(f"{e}. Retrying in 10 seconds")
@@ -59,7 +60,10 @@ def init_vision(
 	else:
 		raise Exception(f"Unreachable camera index (usb{cam_id})")
 
-	parse_detections(model, cap, min_thresh, exit)
+	if (stream==True):
+		stream_yolo.start_server()
+
+	parse_detections(model, cap, min_thresh, exit, stream)
 
 
 def load_model(model_path: Path, convert: bool) -> YOLO:
@@ -102,15 +106,17 @@ def init_capture(camera_id: int, res_w: int, res_h: int) -> cv2.VideoCapture:
 
 	_ = cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(res_w))
 	_ = cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(res_h))
-
+	
 	return cap
 
 
-def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit) -> None:
+def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit, stream: bool = False) -> None:
 	consecutive_detections: int = 0
 	required_consecutive: int = 5
 
-	while not exit.is_set:
+	log.debug("Starting detections parsing.")
+
+	while not exit.is_set():
 		ret: bool
 		frame: Any
 		ret, frame = cap.read()
@@ -119,7 +125,8 @@ def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit
 			log.warning("Frame dropped or camera disconnected")
 			break  # Or attempt to reconnect
 
-		results = model(frame, stream=True, verbose=False)
+		results = model(frame, verbose=False)
+		results_list = list(results)
 
 		if not results:
 			continue
@@ -136,11 +143,18 @@ def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit
 
 		if fire_detected_this_frame:
 			consecutive_detections += 1
+			log.info(f"consecutive detections: {consecutive_detections}")
 			if consecutive_detections >= required_consecutive:
-				log.info(f"\nFIRE DETECTED (Confidence > {min_thresh:.2f})\n")
+				log.info(f"\nFIRE DETECTED (Confidence: {confidence:.1f})\n")
 				# TODO: send signal to arbiter
 
 		else:
 			consecutive_detections = 0
 
-		sleep(0.20)
+		if stream:
+			annotated_frame = results_list[0].plot()
+			ret_encode, buffer = cv2.imencode('.jpg', annotated_frame)
+			if ret_encode:
+				stream_yolo.update_stream(buffer.tobytes())
+
+		sleep(0.05)

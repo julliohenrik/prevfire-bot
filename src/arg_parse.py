@@ -13,7 +13,7 @@ def get_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Robot Entry Point")
 
 	_ = parser.add_argument(
-			"-s", "--start", 
+			"-s", "--state", 
 			help="set starting state: idle (default), patrol",
 			type=str, 
 			default="idle"
@@ -22,7 +22,7 @@ def get_args() -> argparse.Namespace:
 			"-m", "--model",
 			help="set vision's AI",
 			type=str, 
-			default="default-fd_ncnn_model"
+			default="default_ncnn_model"
 			)
 	_ = parser.add_argument(
 			"-t", "--threshold",
@@ -53,16 +53,21 @@ def get_args() -> argparse.Namespace:
 			help="convert pt to ncnn model",
 			action="store_true"
 			)
+	_ = parser.add_argument(
+			"-S", "--stream",
+			help="stream camera feed",
+			action="store_true"
+			)
 
 	return parser.parse_args()
 
 def eval(args: argparse.Namespace) -> None:
-	if args.start == "idle":
+	if args.state == "idle":
 		log.info("Initiating in IDLE state")
-	elif args.start == "patrol":
+	elif args.state == "patrol":
 		log.info("Initiating in PATROL state")
 	else:
-		raise InvalidStateError(f"{args.start}")
+		raise InvalidStateError(f"{args.state}")
 
 	if args.threshold > 1:
 		raise InvalidThresholdError("Must not be greater than 1")
