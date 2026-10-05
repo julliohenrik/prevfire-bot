@@ -49,7 +49,7 @@ Or manually:
 
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install ultralytics opencv-python-headless dill gpiozero prompt_toolkit
+pip install ultralytics opencv-python-headless dill gpiozero prompt_toolkit flask
 ```
 
 If you get any subprocess errors, update pip:
