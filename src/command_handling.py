@@ -6,9 +6,9 @@ from prompt_toolkit import PromptSession
 
 log = logging.getLogger(__name__)
 
-def handling(exit: threading.Event):
+def handling(exit_event: threading.Event):
 	session = PromptSession()
-	while not exit.is_set():
+	while not exit_event.is_set():
 		try:
 			cmd = session.prompt("$ ")
 		except (KeyboardInterrupt, EOFError):

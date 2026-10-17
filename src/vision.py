@@ -5,13 +5,10 @@ from typing import Any
 from ultralytics import YOLO
 import cv2
 import logging
+import sys
 import stream_yolo
 
 log = logging.getLogger(__name__)
-
-## Suppress Qt warnings for OpenCV
-#os.environ["QT_LOGGING_RULES"] = "*.warning=false"
-#os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 def init_vision(
 	model_path: Path,
@@ -21,49 +18,51 @@ def init_vision(
 	res_width: int,
 	res_height: int,
 	stream: bool,
-	exit,
+	exit_event,
 	log_queue,
+	result_q=None,
 ) -> None:
 
 	log.addHandler(QueueHandler(log_queue))
-	
-	tries = 1
 
-	## FIX ME: The "tries for loop" exceptions should be handled by the main thread to avoid
-	## weird behaviour with KeyboardInterrupt: The program is currently shutdown two times.
+	try:
+		tries = 1
+		for n in range(tries):
+			try:
+				model = load_model(model_path, convert)
+				log.info(f"Loading model: {model.names}")
+				break
 
-	for n in range(tries):
-		try: 
-			model = load_model(model_path, convert)
-			log.info(f"Loading model: {model.names}")
-			break
+			except FileNotFoundError as e:
+				log.error(f"{e}")
+				model_path = model_path.parent / "default_ncnn_model"
+		else:
+			raise Exception(f"Failed to start Vision: Invalid or not found model")
 
-		except FileNotFoundError as e:
-			log.error(f"{e}")
-			model_path = model_path.parent / "default_ncnn_model"
-	else:
-		raise Exception(f"Failed to start Vision: Invalid or not found model")
+		tries = 3
+		for n in range(tries):
+			try:
+				cap = init_capture(cam_id, res_width, res_height)
+				break
 
-	tries = 3
-	for n in range(tries):
-		try:
-			cap = init_capture(cam_id, res_width, res_height)
-			break
+			except IndexError as e:
+				if 'cap' in locals() and cap.isOpened():
+					cap.release()
 
-		except IndexError as e:
-			if 'cap' in locals() and cap.isOpened():
-				cap.release()
+				if (n < tries-1):
+					log.error(f"{e}. Retrying in 10 seconds")
+					exit_event.wait(10)
+		else:
+			raise Exception(f"Unreachable camera index (usb{cam_id})")
 
-			if (n < tries-1):
-				log.error(f"{e}. Retrying in 10 seconds")
-				exit.wait(10)
-	else:
-		raise Exception(f"Unreachable camera index (usb{cam_id})")
+		if (stream==True):
+			stream_yolo.start_server()
 
-	if (stream==True):
-		stream_yolo.start_server()
+		parse_detections(model, cap, min_thresh, exit_event, stream, result_q)
 
-	parse_detections(model, cap, min_thresh, exit, stream)
+	except Exception:
+		log.exception("Vision process crashed")
+		sys.exit(1)
 
 
 def load_model(model_path: Path, convert: bool) -> YOLO:
@@ -110,13 +109,24 @@ def init_capture(camera_id: int, res_w: int, res_h: int) -> cv2.VideoCapture:
 	return cap
 
 
-def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit, stream: bool = False) -> None:
+def _drain_latest(q) -> None:
+	## Clears out any stale result still sitting in the queue, so the one
+	## we're about to put is always the only (and therefore newest) thing
+	## in it.
+	while True:
+		try:
+			q.get_nowait()
+		except Exception:
+			break
+
+
+def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit_event, stream: bool = False, result_q=None) -> None:
 	consecutive_detections: int = 0
 	required_consecutive: int = 5
 
 	log.debug("Starting detections parsing.")
 
-	while not exit.is_set():
+	while not exit_event.is_set():
 		ret: bool
 		frame: Any
 		ret, frame = cap.read()
@@ -146,10 +156,19 @@ def parse_detections(model: YOLO, cap: cv2.VideoCapture, min_thresh: float, exit
 			log.info(f"consecutive detections: {consecutive_detections}")
 			if consecutive_detections >= required_consecutive:
 				log.info(f"\nFIRE DETECTED (Confidence: {confidence:.1f})\n")
-				# TODO: send signal to arbiter
 
 		else:
 			consecutive_detections = 0
+
+		if result_q is not None:
+			is_fire_confirmed: bool = consecutive_detections >= required_consecutive
+			reported_confidence: float = confidence if fire_detected_this_frame else 0.0
+
+			_drain_latest(result_q)
+			try:
+				result_q.put_nowait((is_fire_confirmed, reported_confidence))
+			except Exception:
+				pass
 
 		if stream:
 			annotated_frame = results_list[0].plot()

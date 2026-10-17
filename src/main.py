@@ -2,10 +2,8 @@
 
 ## native
 import sys
-import os
 import multiprocessing
 import threading
-from threading import Thread
 import signal
 import logging
 import atexit
@@ -19,16 +17,17 @@ from prompt_toolkit.patch_stdout import patch_stdout
 
 ## custom
 import arg_parse as argp
+import arbiter as arb
 import command_handling as cmd
 import vision as vsn
 
 ROOT_DIR: Path = Path(__file__).resolve().parent.parent
-th_exit = threading.Event()
-mp_exit = multiprocessing.Event()
+
+shutdown_event = threading.Event()
+vision_exit_event = multiprocessing.Event()
 
 log = logging.getLogger(__name__)
 
-## Basic logging config to print logs in sys.stdout and in a log file
 def conf_log(log_file: str = "prevfire.log"):
 	root = logging.getLogger()
 	root.setLevel(logging.DEBUG)
@@ -47,38 +46,18 @@ def conf_log(log_file: str = "prevfire.log"):
 _stdin_fd = sys.stdin.fileno()
 _original_term_settings = termios.tcgetattr(_stdin_fd)
 
-## Prompt Toolkit changes how the terminal is displayed.
-## It is important to restore the default settings of the terminal after exiting the program
 def _restore_terminal():
 	termios.tcsetattr(_stdin_fd, termios.TCSADRAIN, _original_term_settings)
 
 _ = atexit.register(_restore_terminal)
 
-## This class overrides the Thread's run and join functions so that a subthread raises an exception to the main thread
-class PropagatingThread(Thread):
-	#@override
-	def run(self):
-		self.exc = None
-		try:
-			if hasattr(self, '_Thread__target'):
-				self.ret = self._Thread__target(*self._Thread__args, **self._Thread__kwargs)
-			else:
-				self.ret = self._target(*self._args, **self._kwargs)
-		except BaseException as e:
-			self.exc = e
+def request_shutdown() -> None:
+	shutdown_event.set()
+	vision_exit_event.set()
 
-	#@override
-	def join(self, timeout=None):
-		super(PropagatingThread, self).join(timeout)
-		if self.exc:
-			raise self.exc
-		return self.ret
-
-## This defines the behavior of the KeyboardInterrupt so that all processes and threads exits gracefully
 def sigint_handling(signum, frame) -> None:
 	log.info("Shutting down...\n")
-	th_exit.set()
-	mp_exit.set()
+	request_shutdown()
 
 def main():
 	_ = signal.signal(signal.SIGINT, sigint_handling)
@@ -98,12 +77,14 @@ def main():
 
 		model_path: Path = ROOT_DIR / "models" / argv.model
 		log_queue: multiprocessing.Queue[Any] = multiprocessing.Queue()
+		## Carries (fire_detected: bool, confidence: float)
+		vision_result_q: multiprocessing.Queue = multiprocessing.Queue(maxsize=1)
 		listener = QueueListener(log_queue, *log.handlers)
 		listener.start()
 
-		threading.Thread(target=cmd.handling, args=(th_exit,), daemon=True).start()
+		threading.Thread(target=cmd.handling, args=(shutdown_event,), daemon=True).start()
 
-		vision = PropagatingThread(
+		vision_process = multiprocessing.Process(
 			target=vsn.init_vision,
 			args=(
 				model_path,
@@ -113,22 +94,43 @@ def main():
 				argv.resWidth,
 				argv.resHeight,
 				argv.stream,
-				th_exit,
+				vision_exit_event,
 				log_queue,
-			)
+				vision_result_q,
+			),
+			daemon=True,
 		)
+		vision_process.start()
 
-		vision.start()
+		arbiter_thread = threading.Thread(
+			target=arb.run,
+			kwargs=dict(vision_q=vision_result_q, quit_event=shutdown_event),
+			daemon=True,
+		)
+		arbiter_thread.start()
+
 		try:
-			vision.join()
-		except Exception as e:
-			log.fatal(f"Failed to start Vision: {e}")
-			os.kill(os.getpid(), signal.SIGINT)
+			while not shutdown_event.is_set():
+				if not vision_process.is_alive():
+					if vision_process.exitcode:
+						log.fatal(f"Vision process exited unexpectedly (code {vision_process.exitcode})")
+					request_shutdown()
+					break
+				_ = shutdown_event.wait(1)
+		finally:
+			request_shutdown()
 
-		while not th_exit.is_set():
-			_ = th_exit.wait(1)
+			arbiter_thread.join(timeout=2)
+			if arbiter_thread.is_alive():
+				log.warning("Arbiter thread did not stop in time")
 
-		listener.stop()
+			vision_process.join(timeout=5)
+			if vision_process.is_alive():
+				log.warning("Vision process did not exit in time, terminating")
+				vision_process.terminate()
+				vision_process.join()
+
+			listener.stop()
 
 if __name__ == "__main__":
 	main()
